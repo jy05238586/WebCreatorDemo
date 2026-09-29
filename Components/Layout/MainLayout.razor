@@ -1,0 +1,53 @@
+﻿@inherits LayoutComponentBase
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="user-name">@GetUserDisplayName(context.User)</span>
+                    <a href="/MicrosoftIdentity/Account/SignOut" target="_blank">sign out</a>
+                </Authorized>
+                <NotAuthorized>
+                    <span class="user-name">Guest</span>
+                    <a href="/MicrosoftIdentity/Account/SignIn" target="_blank">sign in</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private static string GetUserDisplayName(ClaimsPrincipal user)
+    {
+        var fullName = user.FindFirst("name")?.Value
+            ?? user.FindFirst("given_name")?.Value
+            ?? user.Identity?.Name
+            ?? "User";
+
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            return fullName;
+        }
+
+        return "User";
+    }
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

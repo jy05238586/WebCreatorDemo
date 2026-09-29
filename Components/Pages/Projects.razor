@@ -1,0 +1,87 @@
+﻿@page "/projects"
+@rendermode InteractiveServer
+@using Azure.Data.Tables
+@using BlazorWebCreateAgent.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject HtmlPageStorageService HtmlPageStorageService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Projects</PageTitle>
+
+<h1>Projects</h1>
+
+@if (!isLoaded)
+{
+    <p>Loading your saved pages...</p>
+}
+else if (savedPages.Count == 0)
+{
+    <p>No saved web pages found for this user.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Saved</th>
+                <th>Preview</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var savedPage in savedPages)
+            {
+                <tr>
+                    <td>@(savedPage.FileName)</td>
+                    <td>@savedPage.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        <a href="/?page=@Uri.EscapeDataString(savedPage.RowKey)">Open</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private readonly List<SavedPage> savedPages = new();
+    private bool isLoaded;
+    private string currentUserId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.FindFirst("oid")?.Value
+            ?? authState.User.FindFirst("sub")?.Value
+            ?? authState.User.Identity?.Name
+            ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            isLoaded = true;
+            return;
+        }
+
+        await foreach (var entity in HtmlPageStorageService.QueryAsync(currentUserId, cancellationToken: CancellationToken.None))
+        {
+            savedPages.Add(new SavedPage
+            {
+                RowKey = entity.RowKey,
+                FileName = entity.FileName,
+                CreatedUtc = entity.CreatedUtc,
+                HtmlContent = entity.HtmlContent
+            });
+        }
+
+        savedPages.Sort((x, y) => y.CreatedUtc.CompareTo(x.CreatedUtc));
+        isLoaded = true;
+    }
+
+    private sealed class SavedPage
+    {
+        public string RowKey { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public DateTimeOffset CreatedUtc { get; set; }
+        public string HtmlContent { get; set; } = string.Empty;
+    }
+}

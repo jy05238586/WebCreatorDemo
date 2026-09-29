@@ -1,0 +1,627 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@using BlazorWebCreateAgent.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.AI
+@inject WebCreateChatHandler ChatAgentHandler
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject HtmlPageStorageService HtmlPageStorageService
+@inject ILogger<Home> Logger
+
+<PageTitle>Home</PageTitle>
+
+<style>
+    .home-page {
+        display: grid;
+        grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+        gap: 1.5rem;
+        min-height: calc(100vh - 120px);
+        padding: 2rem;
+        background: linear-gradient(180deg, #f5f7fb 0%, #edf3ff 100%);
+    }
+
+    .chat-panel,
+    .preview-panel {
+        display: flex;
+        flex-direction: column;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 1.25rem;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+        backdrop-filter: blur(8px);
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .eyebrow {
+        margin: 0 0 0.25rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+
+    h2 {
+        margin: 0;
+        font-size: 1.4rem;
+        color: #0f172a;
+    }
+
+    .ghost-button,
+    .composer button {
+        border: none;
+        border-radius: 999px;
+        padding: 0.7rem 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .ghost-button {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
+    .ghost-button:disabled,
+    .composer button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .composer button {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        min-width: 88px;
+    }
+
+    .ghost-button:hover,
+    .composer button:hover {
+        transform: translateY(-1px);
+    }
+
+    .messages {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        padding: 1rem 1.25rem;
+        overflow: auto;
+        background: linear-gradient(180deg, rgba(241, 245, 249, 0.5), rgba(255, 255, 255, 0.1));
+    }
+
+    .message {
+        max-width: 80%;
+        padding: 0.9rem 1rem;
+        border-radius: 1rem;
+        line-height: 1.5;
+        font-size: 0.95rem;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    .message.incoming {
+        align-self: flex-start;
+        background: #f8fafc;
+        color: #0f172a;
+        border-top-left-radius: 0.35rem;
+    }
+
+    .message.outgoing {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #2563eb, #3b82f6);
+        color: #fff;
+        border-top-right-radius: 0.35rem;
+    }
+
+    .composer {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.9rem 1.25rem 1.25rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .composer-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .composer input {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 999px;
+        background: white;
+        padding: 0.85rem 1rem;
+        font-size: 0.95rem;
+        color: #0f172a;
+    }
+
+    .composer input:focus {
+        outline: 2px solid rgba(59, 130, 246, 0.2);
+        border-color: #60a5fa;
+    }
+
+    .preview-panel {
+        min-height: 500px;
+    }
+
+    .frame-wrap {
+        flex: 1;
+        padding: 1rem 1.25rem 1.25rem;
+    }
+
+    iframe {
+        width: 100%;
+        height: 100%;
+        min-height: 480px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 1rem;
+        background: white;
+    }
+
+    @@media (max-width: 900px) {
+        .home-page {
+            grid-template-columns: 1fr;
+            padding: 1rem;
+        }
+
+        .frame-wrap {
+            padding: 0.75rem;
+        }
+    }
+</style>
+
+<div class="home-page">
+    <aside class="chat-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Conversation</p>
+                <h2>Project Assistant</h2>
+            </div>
+            <div class="panel-actions">
+                <button class="ghost-button" type="button" @onclick="ResetConversation">New chat</button>
+            </div>
+        </div>
+
+        <div class="messages" aria-live="polite">
+            @foreach (var message in Messages)
+            {
+                <div class="message @(message.IsUser ? "outgoing" : "incoming")">
+                    <span>@message.Content</span>
+                </div>
+            }
+
+            @if (IsLoading)
+            {
+                <div class="message incoming">
+                    <span>Thinking...</span>
+                </div>
+            }
+        </div>
+
+        <EditForm Model="this" OnValidSubmit="SendMessageAsync" class="composer">
+            <InputText @bind-Value="CurrentInput" placeholder="Type a message..." aria-label="Type a message" />
+            <div class="composer-actions">
+                <button type="submit" disabled="@IsLoading">Send</button>
+                <button type="button" class="ghost-button" disabled="@(!IsLoading)" @onclick="CancelCurrentRun">Cancel</button>
+            </div>
+        </EditForm>
+    </aside>
+
+    <section class="preview-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Preview</p>
+                <h2>HTML Host</h2>
+            </div>
+            <div class="panel-actions">
+                <button
+                    class="ghost-button"
+                    type="button"
+                    disabled="@string.IsNullOrWhiteSpace(GeneratedHtml)"
+                    @onclick="DownloadPreviewAsync">
+                    Download
+                </button>
+                <button
+                    class="ghost-button"
+                    type="button"
+                    disabled="@(!IsLoggedIn || string.IsNullOrWhiteSpace(GeneratedHtml))"
+                    @onclick="SavePreviewAsync">
+                    Save
+                </button>
+            </div>
+        </div>
+
+        <div class="frame-wrap">
+            @if (!string.IsNullOrWhiteSpace(GeneratedHtml))
+            {
+                <iframe
+                    title="Hosted HTML preview"
+                    srcdoc="@GeneratedHtml"
+                    loading="lazy">
+                </iframe>
+            }
+            else
+            {
+                <iframe
+                    title="Hosted HTML preview"
+                    src="/html-host/index.html"
+                    loading="lazy">
+                </iframe>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "page")]
+    public string? SavedPageId { get; set; }
+
+    private readonly List<ChatBubble> Messages = new();
+    private string CurrentInput { get; set; } = string.Empty;
+    private bool IsLoading { get; set; }
+    private bool IsLoggedIn { get; set; }
+    private string? CurrentUserId { get; set; }
+    private string? GeneratedHtml { get; set; }
+    private CancellationTokenSource? _runCts;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        await LoadPageOrUserStateAsync(await AuthenticationStateProvider.GetAuthenticationStateAsync());
+    }
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadPageOrUserStateAsync(await authenticationStateTask);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Unable to load user state after an authentication change.");
+            }
+        });
+    }
+
+    private Task LoadPageOrUserStateAsync(AuthenticationState authState)
+    {
+        return string.IsNullOrWhiteSpace(SavedPageId)
+            ? LoadUserStateAsync(authState)
+            : LoadSavedPageAsync(authState);
+    }
+
+    private async Task LoadSavedPageAsync(AuthenticationState authState)
+    {
+        IsLoggedIn = authState.User.Identity?.IsAuthenticated == true;
+        CurrentUserId = IsLoggedIn
+            ? authState.User.FindFirst("oid")?.Value
+                ?? authState.User.FindFirst("sub")?.Value
+                ?? authState.User.Identity?.Name
+            : null;
+
+        Messages.Clear();
+        Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+        GeneratedHtml = null;
+
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            var savedPage = await HtmlPageStorageService.GetAsync(CurrentUserId, SavedPageId!);
+            GeneratedHtml = savedPage?.HtmlContent;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load saved page {SavedPageId} for user {UserId}.", SavedPageId, CurrentUserId);
+        }
+    }
+
+    private async Task LoadUserStateAsync(AuthenticationState authState)
+    {
+        IsLoggedIn = authState.User.Identity?.IsAuthenticated == true;
+        CurrentUserId = IsLoggedIn
+            ? authState.User.FindFirst("oid")?.Value
+                ?? authState.User.FindFirst("sub")?.Value
+                ?? authState.User.Identity?.Name
+            : null;
+
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            Messages.Clear();
+            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+            GeneratedHtml = null;
+            return;
+        }
+
+        HtmlPageStorageService.UserChatHistoryEntity? chatHistory = null;
+        var chatHistoryLoaded = false;
+        try
+        {
+            chatHistory = await HtmlPageStorageService.GetChatHistoryAsync(CurrentUserId);
+            chatHistoryLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load chat history for user {UserId}.", CurrentUserId);
+        }
+
+        HtmlPageStorageService.UserGeneratedHtmlEntity? generatedHtml = null;
+        try
+        {
+            generatedHtml = await HtmlPageStorageService.GetGeneratedHtmlAsync(CurrentUserId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load generated HTML for user {UserId}.", CurrentUserId);
+        }
+
+        Messages.Clear();
+        if (!await RestoreChatHistoryAsync(chatHistory?.ChatHistory))
+        {
+            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+            if (chatHistoryLoaded && chatHistory is null)
+            {
+                await SaveChatHistoryAsync();
+            }
+        }
+
+        GeneratedHtml = generatedHtml?.HtmlContent;
+    }
+
+    private async Task<bool> RestoreChatHistoryAsync(string? serializedHistory)
+    {
+        if (string.IsNullOrWhiteSpace(serializedHistory))
+        {
+            return false;
+        }
+
+        try
+        {
+            var storedMessages = System.Text.Json.JsonSerializer.Deserialize<List<StoredChatMessage>>(
+                serializedHistory,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (storedMessages is null || storedMessages.Count == 0)
+            {
+                return false;
+            }
+
+            var agentMessages = storedMessages.Select(message =>
+                new ChatMessage(
+                    string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase) ? ChatRole.User : ChatRole.Assistant,
+                    message.Content)).ToList();
+
+            await ChatAgentHandler.RestoreHistoryAsync(agentMessages);
+            Messages.AddRange(storedMessages.Select(message =>
+                new ChatBubble(message.Content, string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase))));
+            return true;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Logger.LogError(ex, "Stored chat history is not valid JSON.");
+            return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
+
+    private async Task SendMessageAsync()
+    {
+        var trimmed = CurrentInput.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return;
+        }
+
+        Messages.Add(new ChatBubble(trimmed, true));        
+
+        CurrentInput = string.Empty;
+        IsLoading = true;
+        var previousHtml = GeneratedHtml;
+        await SaveChatHistoryAsync();
+       
+        _runCts = new CancellationTokenSource();
+
+        try
+        {
+            var reply = await ChatAgentHandler.SendAsync(trimmed, _runCts.Token);
+            if (!string.IsNullOrWhiteSpace(ChatAgentHandler.LastHtmlContent))
+            {
+                GeneratedHtml = ChatAgentHandler.LastHtmlContent;
+            }
+            Messages.Add(new ChatBubble(reply, false));
+        }
+        catch (OperationCanceledException)
+        {
+            Messages.Add(new ChatBubble("Request cancelled.", false));
+        }
+        finally
+        {
+            _runCts?.Dispose();
+            _runCts = null;
+            IsLoading = false;
+            await SaveChatHistoryAsync();
+            if (!string.Equals(previousHtml, GeneratedHtml, StringComparison.Ordinal))
+            {
+                await SaveGeneratedHtmlAsync();
+            }
+        }
+    }
+
+    private void CancelCurrentRun()
+    {
+        if (IsLoading)
+        {
+            _runCts?.Cancel();
+        }
+    }
+
+    private async Task DownloadPreviewAsync()
+    {
+        if (string.IsNullOrWhiteSpace(GeneratedHtml))
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("downloadHtmlFile", "generated-page.html", GeneratedHtml);
+    }
+
+    private async Task SavePreviewAsync()
+    {
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(GeneratedHtml) || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            return;
+        }
+
+        var requestedName = await JS.InvokeAsync<string>("prompt", "Enter a file name for this HTML page:", "page");
+        if (string.IsNullOrWhiteSpace(requestedName))
+        {
+            return;
+        }
+
+        var fileName = requestedName.Trim();
+        var safeFileName = new string(fileName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch).ToArray());
+        if (string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(safeFileName)))
+        {
+            safeFileName = "page.html";
+        }
+        else if (!safeFileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            safeFileName += ".html";
+        }
+
+        try
+        {
+            await HtmlPageStorageService.SaveAsync(CurrentUserId, safeFileName, GeneratedHtml);
+            Messages.Add(new ChatBubble($"Saved '{safeFileName}' to Azure Table Storage.", false));
+            await SaveChatHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            Messages.Add(new ChatBubble($"Unable to save the page: {ex.Message}", false));
+            await SaveChatHistoryAsync();
+        }
+    }
+
+    private async Task ResetConversation()
+    {
+        try
+        {
+            await ChatAgentHandler.NewSessionAsync();
+        }
+        catch (Exception ex)
+        {
+            Messages.Add(new ChatBubble($"Unable to start a new session: {ex.Message}", false));
+            await SaveChatHistoryAsync();
+            return;
+        }
+
+        var previousHtml = GeneratedHtml;
+        Messages.Clear();
+        GeneratedHtml = null;
+        CurrentInput = string.Empty;
+        Messages.Add(new ChatBubble("New conversation started. Ask anything about the project or the app.", false));
+        await SaveChatHistoryAsync();
+        if (!string.Equals(previousHtml, GeneratedHtml, StringComparison.Ordinal))
+        {
+            await SaveGeneratedHtmlAsync();
+        }
+    }
+
+    private async Task SaveChatHistoryAsync()
+    {
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            return;
+        }
+
+        var chatHistory = System.Text.Json.JsonSerializer.Serialize(
+            Messages.Select(message => new
+            {
+                role = message.IsUser ? "user" : "assistant",
+                content = message.Content
+            }));
+
+        try
+        {
+            await HtmlPageStorageService.SaveChatHistoryAsync(CurrentUserId, chatHistory);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to save chat history for user {UserId}.", CurrentUserId);
+        }
+    }
+
+    private async Task SaveGeneratedHtmlAsync()
+    {
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            await HtmlPageStorageService.SaveGeneratedHtmlAsync(CurrentUserId, GeneratedHtml);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to save generated HTML for user {UserId}.", CurrentUserId);
+        }
+    }
+
+    private sealed class ChatBubble
+    {
+        public ChatBubble(string content, bool isUser)
+        {
+            Content = content;
+            IsUser = isUser;
+        }
+
+        public string Content { get; }
+        public bool IsUser { get; }
+    }
+
+    private sealed class StoredChatMessage
+    {
+        public string Role { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+    }
+}
