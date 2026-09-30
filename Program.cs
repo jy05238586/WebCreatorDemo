@@ -20,6 +20,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<WebCreateChatHandler>();
 builder.Services.AddScoped<HtmlPageStorageService>();
+builder.Services.AddScoped<UserStateService>();
 
 var app = builder.Build();
 

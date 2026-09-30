@@ -1,12 +1,12 @@
 using System.Runtime.CompilerServices;
-using Azure;
+using System.Security.Cryptography;
+using System.Text;
 using Azure.Data.Tables;
 
 namespace BlazorWebCreateAgent.Services;
 
 public sealed class HtmlPageStorageService
 {
-    private const string CurrentStateRowKey = "current";
     private readonly TableClient _tableClient;
     private readonly TableClient _userSessionsTableClient;
     private readonly TableClient _userGeneratedHtmlTableClient;
@@ -82,11 +82,16 @@ public sealed class HtmlPageStorageService
         return response.HasValue ? response.Value : null;
     }
 
-    public async Task SaveChatHistoryAsync(string userId, string chatHistory, CancellationToken cancellationToken = default)
+    public async Task SaveChatHistoryAsync(string userId, string sessionId, string chatHistory, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
             throw new ArgumentException("User ID is required.", nameof(userId));
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("Session ID is required.", nameof(sessionId));
         }
 
         await _userSessionsTableClient.CreateIfNotExistsAsync(cancellationToken);
@@ -94,19 +99,19 @@ public sealed class HtmlPageStorageService
         var entity = new UserChatHistoryEntity
         {
             PartitionKey = userId,
-            RowKey = CurrentStateRowKey,
+            RowKey = GetSessionRowKey(sessionId),
             UserId = userId,
+            SessionId = sessionId,
             ChatHistory = chatHistory,
             UpdatedUtc = DateTimeOffset.UtcNow
         };
 
         await _userSessionsTableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, cancellationToken);
-        await RemoveSupersededRowsAsync<UserChatHistoryEntity>(_userSessionsTableClient, userId, cancellationToken);
     }
 
-    public async Task<UserChatHistoryEntity?> GetChatHistoryAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<UserChatHistoryEntity?> GetChatHistoryAsync(string userId, string sessionId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(sessionId))
         {
             return null;
         }
@@ -114,17 +119,40 @@ public sealed class HtmlPageStorageService
         await _userSessionsTableClient.CreateIfNotExistsAsync(cancellationToken);
         var response = await _userSessionsTableClient.GetEntityIfExistsAsync<UserChatHistoryEntity>(
             userId,
-            CurrentStateRowKey,
+            GetSessionRowKey(sessionId),
             cancellationToken: cancellationToken);
 
         return response.HasValue ? response.Value : null;
     }
 
-    public async Task SaveGeneratedHtmlAsync(string userId, string? htmlContent, CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<UserChatHistoryEntity> QueryChatHistoryAsync(
+        string userId,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            yield break;
+        }
+
+        await _userSessionsTableClient.CreateIfNotExistsAsync(cancellationToken);
+        await foreach (var entity in _userSessionsTableClient.QueryAsync<UserChatHistoryEntity>(
+            row => row.PartitionKey == userId,
+            cancellationToken: cancellationToken))
+        {
+            yield return entity;
+        }
+    }
+
+    public async Task SaveGeneratedHtmlAsync(string userId, string sessionId, string? htmlContent, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
             throw new ArgumentException("User ID is required.", nameof(userId));
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("Session ID is required.", nameof(sessionId));
         }
 
         await _userGeneratedHtmlTableClient.CreateIfNotExistsAsync(cancellationToken);
@@ -132,19 +160,19 @@ public sealed class HtmlPageStorageService
         var entity = new UserGeneratedHtmlEntity
         {
             PartitionKey = userId,
-            RowKey = CurrentStateRowKey,
+            RowKey = GetSessionRowKey(sessionId),
             UserId = userId,
+            SessionId = sessionId,
             HtmlContent = htmlContent ?? string.Empty,
             UpdatedUtc = DateTimeOffset.UtcNow
         };
 
         await _userGeneratedHtmlTableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, cancellationToken);
-        await RemoveSupersededRowsAsync<UserGeneratedHtmlEntity>(_userGeneratedHtmlTableClient, userId, cancellationToken);
     }
 
-    public async Task<UserGeneratedHtmlEntity?> GetGeneratedHtmlAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<UserGeneratedHtmlEntity?> GetGeneratedHtmlAsync(string userId, string sessionId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(sessionId))
         {
             return null;
         }
@@ -152,58 +180,15 @@ public sealed class HtmlPageStorageService
         await _userGeneratedHtmlTableClient.CreateIfNotExistsAsync(cancellationToken);
         var response = await _userGeneratedHtmlTableClient.GetEntityIfExistsAsync<UserGeneratedHtmlEntity>(
             userId,
-            CurrentStateRowKey,
+            GetSessionRowKey(sessionId),
             cancellationToken: cancellationToken);
 
         return response.HasValue ? response.Value : null;
     }
 
-    private static async Task RemoveSupersededRowsAsync<TEntity>(TableClient tableClient, string userId, CancellationToken cancellationToken)
-        where TEntity : class, ITableEntity, new()
+    private static string GetSessionRowKey(string sessionId)
     {
-        await foreach (var entity in tableClient.QueryAsync<TEntity>(row => row.PartitionKey == userId, cancellationToken: cancellationToken))
-        {
-            if (!string.Equals(entity.RowKey, CurrentStateRowKey, StringComparison.Ordinal))
-            {
-                await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey, cancellationToken: cancellationToken);
-            }
-        }
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sessionId)));
     }
 
-    public sealed class SavedHtmlEntity : ITableEntity
-    {
-        public string PartitionKey { get; set; } = string.Empty;
-        public string RowKey { get; set; } = string.Empty;
-        public DateTimeOffset? Timestamp { get; set; }
-        public ETag ETag { get; set; }
-
-        public string UserId { get; set; } = string.Empty;
-        public string FileName { get; set; } = string.Empty;
-        public string HtmlContent { get; set; } = string.Empty;
-        public DateTimeOffset CreatedUtc { get; set; }
-    }
-
-    public sealed class UserChatHistoryEntity : ITableEntity
-    {
-        public string PartitionKey { get; set; } = string.Empty;
-        public string RowKey { get; set; } = string.Empty;
-        public DateTimeOffset? Timestamp { get; set; }
-        public ETag ETag { get; set; }
-
-        public string UserId { get; set; } = string.Empty;
-        public string ChatHistory { get; set; } = string.Empty;
-        public DateTimeOffset UpdatedUtc { get; set; }
-    }
-
-    public sealed class UserGeneratedHtmlEntity : ITableEntity
-    {
-        public string PartitionKey { get; set; } = string.Empty;
-        public string RowKey { get; set; } = string.Empty;
-        public DateTimeOffset? Timestamp { get; set; }
-        public ETag ETag { get; set; }
-
-        public string UserId { get; set; } = string.Empty;
-        public string HtmlContent { get; set; } = string.Empty;
-        public DateTimeOffset UpdatedUtc { get; set; }
-    }
 }

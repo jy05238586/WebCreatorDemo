@@ -14,11 +14,11 @@
             <AuthorizeView>
                 <Authorized>
                     <span class="user-name">@GetUserDisplayName(context.User)</span>
-                    <a href="/MicrosoftIdentity/Account/SignOut" target="_blank">sign out</a>
+                    <a href="/MicrosoftIdentity/Account/SignOut">sign out</a>
                 </Authorized>
                 <NotAuthorized>
                     <span class="user-name">Guest</span>
-                    <a href="/MicrosoftIdentity/Account/SignIn" target="_blank">sign in</a>
+                    <a href="/MicrosoftIdentity/Account/SignIn">sign in</a>
                 </NotAuthorized>
             </AuthorizeView>
         </div>

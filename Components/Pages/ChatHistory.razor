@@ -1,0 +1,101 @@
+@page "/chathistory"
+@rendermode InteractiveServer
+@using BlazorWebCreateAgent.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject UserStateService UserStateService
+@inject ILogger<ChatHistory> Logger
+
+<PageTitle>Chat history</PageTitle>
+
+<h1>Chat history</h1>
+
+@if (!isLoaded)
+{
+    <p>Loading chat history...</p>
+}
+else if (!isAuthenticated)
+{
+    <p>Sign in to view your chat history.</p>
+}
+else if (sessions.Count == 0)
+{
+    <p>No saved conversations found for this user.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">First user message</th>
+                    <th scope="col">Date and time</th>
+                    <th scope="col">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var session in sessions)
+                {
+                    var firstUserMessage = session.Messages.FirstOrDefault(message =>
+                        string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase));
+                    <tr>
+                        <td>@(firstUserMessage?.Content ?? "Conversation")</td>
+                        <td>@session.UpdatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" type="button" @onclick="() => LoadSession(session.SessionId)">
+                                Load
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly List<ChatHistorySession> sessions = new();
+    private bool isLoaded;
+    private bool isAuthenticated;
+
+    private void LoadSession(string sessionId)
+    {
+        Navigation.NavigateTo(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
+            "/",
+            "sessionid",
+            sessionId));
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
+        if (!isAuthenticated)
+        {
+            isLoaded = true;
+            return;
+        }
+
+        var userId = authState.User.FindFirst("oid")?.Value
+            ?? authState.User.FindFirst("sub")?.Value
+            ?? authState.User.Identity?.Name;
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            isLoaded = true;
+            return;
+        }
+
+        try
+        {
+            sessions.AddRange(await UserStateService.LoadAllChatHistoryAsync(userId));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load chat history for user {UserId}.", userId);
+        }
+
+        isLoaded = true;
+    }
+}

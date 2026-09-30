@@ -8,7 +8,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
-@inject HtmlPageStorageService HtmlPageStorageService
+@inject UserStateService UserStateService
 @inject ILogger<Home> Logger
 
 <PageTitle>Home</PageTitle>
@@ -278,18 +278,30 @@
     [SupplyParameterFromQuery(Name = "page")]
     public string? SavedPageId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "sessionid")]
+    public string? SessionIdFromQuery { get; set; }
+
     private readonly List<ChatBubble> Messages = new();
     private string CurrentInput { get; set; } = string.Empty;
     private bool IsLoading { get; set; }
     private bool IsLoggedIn { get; set; }
     private string? CurrentUserId { get; set; }
     private string? GeneratedHtml { get; set; }
+    private string? CurrentSessionId { get; set; }
+    private bool _sessionIdWasProvided;
     private CancellationTokenSource? _runCts;
     private bool _disposed;
 
     protected override async Task OnInitializedAsync()
     {
         AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        _sessionIdWasProvided = !string.IsNullOrWhiteSpace(SessionIdFromQuery);
+        CurrentSessionId = SessionIdFromQuery;
+        if (!_sessionIdWasProvided)
+        {
+            UpdateSessionId(Guid.NewGuid().ToString("N"));
+        }
+
         await LoadPageOrUserStateAsync(await AuthenticationStateProvider.GetAuthenticationStateAsync());
     }
 
@@ -339,15 +351,7 @@
             return;
         }
 
-        try
-        {
-            var savedPage = await HtmlPageStorageService.GetAsync(CurrentUserId, SavedPageId!);
-            GeneratedHtml = savedPage?.HtmlContent;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Unable to load saved page {SavedPageId} for user {UserId}.", SavedPageId, CurrentUserId);
-        }
+        GeneratedHtml = await UserStateService.LoadSavedPageAsync(CurrentUserId, SavedPageId!);
     }
 
     private async Task LoadUserStateAsync(AuthenticationState authState)
@@ -364,62 +368,40 @@
             Messages.Clear();
             Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
             GeneratedHtml = null;
+
             return;
         }
 
-        HtmlPageStorageService.UserChatHistoryEntity? chatHistory = null;
-        var chatHistoryLoaded = false;
-        try
+        if (string.IsNullOrWhiteSpace(CurrentSessionId))
         {
-            chatHistory = await HtmlPageStorageService.GetChatHistoryAsync(CurrentUserId);
-            chatHistoryLoaded = true;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Unable to load chat history for user {UserId}.", CurrentUserId);
+            return;
         }
 
-        HtmlPageStorageService.UserGeneratedHtmlEntity? generatedHtml = null;
-        try
+        var userState = await UserStateService.LoadAsync(CurrentUserId, CurrentSessionId);
+        if (_sessionIdWasProvided && userState.SessionLookupSucceeded && userState.SessionExists)
         {
-            generatedHtml = await HtmlPageStorageService.GetGeneratedHtmlAsync(CurrentUserId);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Unable to load generated HTML for user {UserId}.", CurrentUserId);
-        }
-
-        Messages.Clear();
-        if (!await RestoreChatHistoryAsync(chatHistory?.ChatHistory))
-        {
-            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
-            if (chatHistoryLoaded && chatHistory is null)
+            Messages.Clear();
+            if (!await RestoreChatHistoryAsync(userState.ChatMessages))
             {
-                await SaveChatHistoryAsync();
+                Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
             }
-        }
 
-        GeneratedHtml = generatedHtml?.HtmlContent;
+            GeneratedHtml = userState.GeneratedHtml;
+        }
+        else{
+            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+        }
     }
 
-    private async Task<bool> RestoreChatHistoryAsync(string? serializedHistory)
+    private async Task<bool> RestoreChatHistoryAsync(IReadOnlyList<UserChatMessage>? storedMessages)
     {
-        if (string.IsNullOrWhiteSpace(serializedHistory))
+        if (storedMessages is null || storedMessages.Count == 0)
         {
             return false;
         }
 
         try
         {
-            var storedMessages = System.Text.Json.JsonSerializer.Deserialize<List<StoredChatMessage>>(
-                serializedHistory,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (storedMessages is null || storedMessages.Count == 0)
-            {
-                return false;
-            }
-
             var agentMessages = storedMessages.Select(message =>
                 new ChatMessage(
                     string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase) ? ChatRole.User : ChatRole.Assistant,
@@ -530,14 +512,11 @@
 
         try
         {
-            await HtmlPageStorageService.SaveAsync(CurrentUserId, safeFileName, GeneratedHtml);
-            Messages.Add(new ChatBubble($"Saved '{safeFileName}' to Azure Table Storage.", false));
-            await SaveChatHistoryAsync();
+            await UserStateService.SavePageAsync(CurrentUserId, safeFileName, GeneratedHtml);
         }
         catch (Exception ex)
         {
             Messages.Add(new ChatBubble($"Unable to save the page: {ex.Message}", false));
-            await SaveChatHistoryAsync();
         }
     }
 
@@ -550,7 +529,6 @@
         catch (Exception ex)
         {
             Messages.Add(new ChatBubble($"Unable to start a new session: {ex.Message}", false));
-            await SaveChatHistoryAsync();
             return;
         }
 
@@ -558,53 +536,46 @@
         Messages.Clear();
         GeneratedHtml = null;
         CurrentInput = string.Empty;
+        UpdateSessionId(Guid.NewGuid().ToString("N"));
         Messages.Add(new ChatBubble("New conversation started. Ask anything about the project or the app.", false));
-        await SaveChatHistoryAsync();
-        if (!string.Equals(previousHtml, GeneratedHtml, StringComparison.Ordinal))
-        {
-            await SaveGeneratedHtmlAsync();
-        }
     }
 
     private async Task SaveChatHistoryAsync()
     {
-        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId) || string.IsNullOrWhiteSpace(CurrentSessionId))
         {
             return;
         }
 
-        var chatHistory = System.Text.Json.JsonSerializer.Serialize(
-            Messages.Select(message => new
-            {
-                role = message.IsUser ? "user" : "assistant",
-                content = message.Content
-            }));
-
-        try
-        {
-            await HtmlPageStorageService.SaveChatHistoryAsync(CurrentUserId, chatHistory);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Unable to save chat history for user {UserId}.", CurrentUserId);
-        }
+        await UserStateService.SaveChatHistoryAsync(
+            CurrentUserId,
+            CurrentSessionId,
+            Messages.Select(message => new UserChatMessage(
+                message.IsUser ? "user" : "assistant",
+                message.Content)));
     }
 
     private async Task SaveGeneratedHtmlAsync()
     {
-        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
+        if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId) || string.IsNullOrWhiteSpace(CurrentSessionId))
         {
             return;
         }
 
-        try
+        await UserStateService.SaveGeneratedHtmlAsync(CurrentUserId, CurrentSessionId, GeneratedHtml);
+    }
+
+    private void UpdateSessionId(string sessionId)
+    {
+        if (string.Equals(CurrentSessionId, sessionId, StringComparison.Ordinal))
         {
-            await HtmlPageStorageService.SaveGeneratedHtmlAsync(CurrentUserId, GeneratedHtml);
+            return;
         }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Unable to save generated HTML for user {UserId}.", CurrentUserId);
-        }
+
+        CurrentSessionId = sessionId;
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameter("sessionid", sessionId),
+            replace: true);
     }
 
     private sealed class ChatBubble
@@ -618,10 +589,5 @@
         public string Content { get; }
         public bool IsUser { get; }
     }
-
-    private sealed class StoredChatMessage
-    {
-        public string Role { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-    }
+    
 }

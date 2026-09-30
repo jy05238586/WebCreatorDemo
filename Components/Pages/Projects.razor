@@ -3,6 +3,7 @@
 @using Azure.Data.Tables
 @using BlazorWebCreateAgent.Services
 @using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
 @inject HtmlPageStorageService HtmlPageStorageService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
@@ -35,7 +36,7 @@ else
                     <td>@(savedPage.FileName)</td>
                     <td>@savedPage.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                     <td>
-                        <a href="/?page=@Uri.EscapeDataString(savedPage.RowKey)">Open</a>
+                        <a href="@BuildSavedPageUrl(savedPage.RowKey)">Open</a>
                     </td>
                 </tr>
             }
@@ -47,6 +48,17 @@ else
     private readonly List<SavedPage> savedPages = new();
     private bool isLoaded;
     private string currentUserId = string.Empty;
+
+    private string BuildSavedPageUrl(string pageId)
+    {
+        var url = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("/", "page", pageId);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+            Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+
+        return query.TryGetValue("sessionid", out var sessionId)
+            ? Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(url, "sessionid", sessionId.ToString())
+            : url;
+    }
 
     protected override async Task OnInitializedAsync()
     {
