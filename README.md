@@ -128,3 +128,22 @@ dotnet build BlazorWebCreateAgent.csproj --configuration Release
 2. 生成后可进一步交互并修正设计；
 3. 支持更复杂的web架构
 4. 开发 AITool可通过Bicep一键创建云端资源，实现生成即部署避免繁琐的云端设置；
+
+## 测试用户
+testuser1@sunyiping88gmail.onmicrosoft.com
+Puvu3746751
+
+testuser2@sunyiping88gmail.onmicrosoft.com (Contains major test cases )
+Qula7138151
+
+testuser3@sunyiping88gmail.onmicrosoft.com (empty history)
+Noyu3560681
+
+## 测试样例
+登录 testuser2，
+1. Projects/kanban2.html, KANBAN.html, 大部分正常JS功能正常工作；
+2. Projects/signouttest.html, inpagenavigationtest.html, 这些例子都不能破坏sandbox；
+3. ChatHistory/hello your name is Bob, 给出上下文，AI可以记住；
+4. ChatHistory/your name is Bob, 重新载入上下文， AI仍然可以记得之前的对话；
+5. ChatHistory/what's your name\， 开辟新对话以及切换对话，历史不会污染；
+6. ChatHistory/Hello, 暂时挂起LLM， 给出错误信息；
