@@ -128,3 +128,10 @@ dotnet build BlazorWebCreateAgent.csproj --configuration Release
 2. 生成后可进一步交互并修正设计；
 3. 支持更复杂的web架构
 4. 开发 AITool可通过Bicep一键创建云端资源，实现生成即部署避免繁琐的云端设置；
+
+## 测试用户
+testuser1@sunyiping88gmail.onmicrosoft.com
+Puvu3746751
+
+testuser2@sunyiping88gmail.onmicrosoft.com
+Qula7138151

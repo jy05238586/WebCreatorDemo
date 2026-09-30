@@ -8,7 +8,10 @@ internal static class WebPageGeneratorAgent
     public static AIAgent Create(IChatClient chatClient)
         => Create(chatClient, out _);
 
-    public static AIAgent Create(IChatClient chatClient, out InMemoryChatHistoryProvider chatHistoryProvider)
+    public static AIAgent Create(
+        IChatClient chatClient,
+        out InMemoryChatHistoryProvider chatHistoryProvider,
+        Func<string, Task>? onToolActivity = null)
     {
         chatHistoryProvider = new InMemoryChatHistoryProvider();
         var options = new ChatClientAgentOptions
@@ -18,7 +21,7 @@ internal static class WebPageGeneratorAgent
             ChatOptions = new ChatOptions
             {
                 Instructions = LoadSystemPrompt(),
-                Tools = [HtmlGenerationTool.Create(chatClient)]
+                Tools = [HtmlGenerationTool.Create(chatClient, onToolActivity)]
             },
             ChatHistoryProvider = chatHistoryProvider
         };

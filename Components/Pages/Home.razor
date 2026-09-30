@@ -212,12 +212,6 @@
                 </div>
             }
 
-            @if (IsLoading)
-            {
-                <div class="message incoming">
-                    <span>Thinking...</span>
-                </div>
-            }
         </div>
 
         <EditForm Model="this" OnValidSubmit="SendMessageAsync" class="composer">
@@ -258,7 +252,10 @@
             {
                 <iframe
                     title="Hosted HTML preview"
-                    srcdoc="@GeneratedHtml"
+                    srcdoc="@PreparePreviewHtml(GeneratedHtml)"
+                    sandbox="allow-scripts allow-modals allow-forms"
+                    allow=""
+                    referrerpolicy="no-referrer"
                     loading="lazy">
                 </iframe>
             }
@@ -267,6 +264,7 @@
                 <iframe
                     title="Hosted HTML preview"
                     src="/html-host/index.html"
+                    sandbox=""
                     loading="lazy">
                 </iframe>
             }
@@ -291,6 +289,40 @@
     private bool _sessionIdWasProvided;
     private CancellationTokenSource? _runCts;
     private bool _disposed;
+
+    private static string PreparePreviewHtml(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        const string previewBootstrap =
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'\">" +
+            "<script>(()=>{const createStorage=()=>{const values=new Map();return{get length(){return values.size},key(index){return Array.from(values.keys())[index]??null},getItem(key){key=String(key);return values.has(key)?values.get(key):null},setItem(key,value){values.set(String(key),String(value))},removeItem(key){values.delete(String(key))},clear(){values.clear()}}};Object.defineProperty(window,'localStorage',{configurable:true,value:createStorage()});Object.defineProperty(window,'sessionStorage',{configurable:true,value:createStorage()});document.addEventListener('click',event=>{const link=event.target.closest?.('a[href]');if(link)event.preventDefault()},true)})();</script>";
+
+        var headStart = html.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
+        if (headStart >= 0)
+        {
+            var headEnd = html.IndexOf('>', headStart);
+            if (headEnd >= 0)
+            {
+                return html.Insert(headEnd + 1, previewBootstrap);
+            }
+        }
+
+        var htmlStart = html.IndexOf("<html", StringComparison.OrdinalIgnoreCase);
+        if (htmlStart >= 0)
+        {
+            var htmlEnd = html.IndexOf('>', htmlStart);
+            if (htmlEnd >= 0)
+            {
+                return html.Insert(htmlEnd + 1, $"<head>{previewBootstrap}</head>");
+            }
+        }
+
+        return previewBootstrap + html;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -439,21 +471,31 @@
         IsLoading = true;
         var previousHtml = GeneratedHtml;
         await SaveChatHistoryAsync();
-       
+
         _runCts = new CancellationTokenSource();
+        var assistantMessage = new ChatBubble("Thinking...", false);
+        Messages.Add(assistantMessage);
+        await InvokeAsync(StateHasChanged);
 
         try
         {
-            var reply = await ChatAgentHandler.SendAsync(trimmed, _runCts.Token);
+            var reply = await ChatAgentHandler.SendAsync(
+                trimmed,
+                _runCts.Token,
+                async streamedText =>
+                {
+                    assistantMessage.Content = streamedText + "  Thinking ... ";
+                    await InvokeAsync(StateHasChanged);
+                });
             if (!string.IsNullOrWhiteSpace(ChatAgentHandler.LastHtmlContent))
             {
                 GeneratedHtml = ChatAgentHandler.LastHtmlContent;
             }
-            Messages.Add(new ChatBubble(reply, false));
+            assistantMessage.Content = reply;
         }
         catch (OperationCanceledException)
         {
-            Messages.Add(new ChatBubble("Request cancelled.", false));
+            assistantMessage.Content = "Request cancelled.";
         }
         finally
         {
@@ -586,7 +628,7 @@
             IsUser = isUser;
         }
 
-        public string Content { get; }
+        public string Content { get; set; }
         public bool IsUser { get; }
     }
     

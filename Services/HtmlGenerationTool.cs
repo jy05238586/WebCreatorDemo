@@ -5,10 +5,10 @@ namespace BlazorWebCreateAgent.Services;
 
 internal static class HtmlGenerationTool
 {
-    public static AITool Create(IChatClient chatClient)
+    public static AITool Create(IChatClient chatClient, Func<string, Task>? onToolActivity = null)
     {
         Func<string, CancellationToken, Task<string>> generateBestHtml =
-            (request, cancellationToken) => GenerateBestHtmlAsync(chatClient, request, cancellationToken);
+            (request, cancellationToken) => GenerateBestHtmlAsync(chatClient, request, cancellationToken, onToolActivity);
 
         return AIFunctionFactory.Create(
             generateBestHtml,
@@ -19,17 +19,27 @@ internal static class HtmlGenerationTool
     private static async Task<string> GenerateBestHtmlAsync(
         IChatClient chatClient,
         string request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, Task>? onToolActivity)
     {
+        if (onToolActivity is not null)
+        {
+            await onToolActivity("Tool call: generate_best_html. \r\n Generating pages ... ");
+        }
+
         var candidates = await Task.WhenAll(
-            GenerateCandidateAsync(chatClient, request, "Use a clean editorial layout with strong typography and clear visual hierarchy.", cancellationToken),
-            GenerateCandidateAsync(chatClient, request, "Use a distinct visual direction with a compact, highly usable responsive layout.", cancellationToken));
+            GenerateCandidateAsync(chatClient, request, "Use a clean editorial layout with strong typography and clear visual hierarchy.", onToolActivity, cancellationToken),
+            GenerateCandidateAsync(chatClient, request, "Use a distinct visual direction with a compact, highly usable responsive layout.", onToolActivity, cancellationToken));
 
         var firstScore = candidates[0].Score;
         var secondScore = candidates[1].Score;
         var selectedIndex = secondScore > firstScore ? 1 : 0;
         var selectedHtml = candidates[selectedIndex].Html;
 
+        if (onToolActivity is not null)
+        {
+            await onToolActivity("Candidates generated. Comparing scores and generating result ... ");
+        }
         return $"Candidate 1 estimated score: {firstScore}/100. Candidate 2 estimated score: {secondScore}/100. " +
             $"Selected candidate {selectedIndex + 1}. Return its HTML as the htmlcontent value.\n\n{selectedHtml}";
     }
@@ -38,15 +48,25 @@ internal static class HtmlGenerationTool
         IChatClient chatClient,
         string request,
         string direction,
+        Func<string, Task>? onToolActivity,
         CancellationToken cancellationToken)
     {
         var prompt = $"Create a complete, self-contained, responsive HTML5 page for this request:\n{request}\n\n" +
             $"Design direction: {direction}\n\n" +
-            "Use semantic HTML, an appropriate page title, a viewport meta tag, accessible controls and images, and responsive CSS. Keep it under 1000 lines. " +
+            "Use semantic HTML, an appropriate page title, a viewport meta tag, accessible controls and images, and responsive CSS. Keep it under 1000 lines. Make sure it works in an iframe with sandbox=\"allow-scripts allow-modals\"" +
             "Estimate the quality of the page you create from 0 to 100 using these equally weighted criteria: fulfillment of the request, visual hierarchy and usability, responsive behavior, accessibility, and semantic/code quality. Be candid; do not default to a high score. " +
             "Return only one valid JSON object with an integer \"score\" from 0 to 100 and the complete HTML document in \"htmlcontent\". Do not use markdown fences or commentary.";
 
         var response = await chatClient.GetResponseAsync(prompt, cancellationToken: cancellationToken);
+        var candidate = ParseCandidate(response.Text ?? string.Empty);
+
+        if (onToolActivity is not null)
+        {
+            await onToolActivity(
+                $"A Candidate Generated: {candidate.Score}/100; ");
+        }
+
+
         return ParseCandidate(response.Text ?? string.Empty);
     }
 
