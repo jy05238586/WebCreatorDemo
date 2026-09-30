@@ -146,3 +146,4 @@ Noyu3560681
 3. ChatHistory/hello your name is Bob, 给出上下文，AI可以记住；
 4. ChatHistory/your name is Bob, 重新载入上下文， AI仍然可以记得之前的对话；
 5. ChatHistory/what's your name\， 开辟新对话以及切换对话，历史不会污染；
+6. ChatHistory/Hello, 暂时挂起LLM， 给出错误信息；
