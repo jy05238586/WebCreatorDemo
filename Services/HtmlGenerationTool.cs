@@ -53,7 +53,7 @@ internal static class HtmlGenerationTool
     {
         var prompt = $"Create a complete, self-contained, responsive HTML5 page for this request:\n{request}\n\n" +
             $"Design direction: {direction}\n\n" +
-            "Use semantic HTML, an appropriate page title, a viewport meta tag, accessible controls and images, and responsive CSS. Keep it under 1000 lines. Make sure it works in an iframe with sandbox=\"allow-scripts allow-modals\"" +
+            "Use semantic HTML, an appropriate page title, a viewport meta tag, accessible controls and images, and responsive CSS. Keep it under 1000 lines. Make sure it works in an iframe with sandbox=\"allow-scripts allow-modals\" and Use only inline scripts and styles; do not load external scripts, stylesheets, fonts, images, or other resources. Images and media must use data: or blob: URLs. Do not use network requests, fetch/XHR, WebSockets, external navigation, or form submissions. Do not use unsafe-eval" +
             "Estimate the quality of the page you create from 0 to 100 using these equally weighted criteria: fulfillment of the request, visual hierarchy and usability, responsive behavior, accessibility, and semantic/code quality. Be candid; do not default to a high score. " +
             "Return only one valid JSON object with an integer \"score\" from 0 to 100 and the complete HTML document in \"htmlcontent\". Do not use markdown fences or commentary.";
 
