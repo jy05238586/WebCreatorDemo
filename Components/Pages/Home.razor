@@ -413,7 +413,7 @@
         if (_sessionIdWasProvided && userState.SessionLookupSucceeded && userState.SessionExists)
         {
             Messages.Clear();
-            if (!await RestoreChatHistoryAsync(userState.ChatMessages))
+            if (!await RestoreChatHistoryAsync(userState.ChatMessages, userState.GeneratedHtml))
             {
                 Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
             }
@@ -425,7 +425,9 @@
         }
     }
 
-    private async Task<bool> RestoreChatHistoryAsync(IReadOnlyList<UserChatMessage>? storedMessages)
+    private async Task<bool> RestoreChatHistoryAsync(
+        IReadOnlyList<UserChatMessage>? storedMessages,
+        string? generatedHtml)
     {
         if (storedMessages is null || storedMessages.Count == 0)
         {
@@ -438,6 +440,11 @@
                 new ChatMessage(
                     string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase) ? ChatRole.User : ChatRole.Assistant,
                     message.Content)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(generatedHtml))
+            {
+                agentMessages.Add(new ChatMessage(ChatRole.Assistant, generatedHtml));
+            }
 
             await ChatAgentHandler.RestoreHistoryAsync(agentMessages);
             Messages.AddRange(storedMessages.Select(message =>
