@@ -1,4 +1,4 @@
-﻿@page "/"
+﻿@page "/chat"
 @rendermode InteractiveServer
 @implements IDisposable
 @using BlazorWebCreateAgent.Services
@@ -11,27 +11,35 @@
 @inject UserStateService UserStateService
 @inject ILogger<Home> Logger
 
-<PageTitle>Home</PageTitle>
+<PageTitle>网页创作工作台</PageTitle>
 
 <style>
     .home-page {
+        --dashboard-bg: #f7f7f6;
+        --dashboard-panel: #ffffff;
+        --dashboard-border: #e7e6e4;
+        --dashboard-ink: #242326;
+        --dashboard-muted: #77767b;
+        --dashboard-accent: #7356d8;
         display: grid;
-        grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
-        gap: 1.5rem;
-        min-height: calc(100vh - 120px);
-        padding: 2rem;
-        background: linear-gradient(180deg, #f5f7fb 0%, #edf3ff 100%);
+        grid-template-columns: minmax(320px, 0.88fr) minmax(0, 1.45fr);
+        gap: 1.1rem;
+        box-sizing: border-box;
+        min-height: calc(100vh - 8.5rem);
+        padding: 1.5rem;
+        color: var(--dashboard-ink);
+        background: var(--dashboard-bg);
     }
 
     .chat-panel,
     .preview-panel {
         display: flex;
         flex-direction: column;
-        background: rgba(255, 255, 255, 0.8);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-        border-radius: 1.25rem;
-        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
-        backdrop-filter: blur(8px);
+        min-width: 0;
+        background: var(--dashboard-panel);
+        border: 1px solid var(--dashboard-border);
+        border-radius: 1.2rem;
+        box-shadow: 0 4px 18px rgba(31, 29, 35, 0.035);
     }
 
     .panel-header {
@@ -39,8 +47,8 @@
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        padding: 1.1rem 1.25rem;
+        border-bottom: 1px solid #efeeed;
     }
 
     .panel-actions {
@@ -56,28 +64,27 @@
         font-size: 0.72rem;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #64748b;
+        color: var(--dashboard-muted);
     }
 
     h2 {
         margin: 0;
         font-size: 1.4rem;
-        color: #0f172a;
+        color: var(--dashboard-ink);
+        font-weight: 650;
+        letter-spacing: -0.035em;
     }
 
     .ghost-button,
     .composer button {
-        border: none;
+        border: 1px solid #e8e7e5;
         border-radius: 999px;
-        padding: 0.7rem 1rem;
+        padding: 0.48rem 0.9rem;
+        background: #fff;
+        color: #39373d;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s ease, opacity 0.2s ease;
-    }
-
-    .ghost-button {
-        background: #e2e8f0;
-        color: #0f172a;
+        transition: border-color 150ms ease, background 150ms ease, color 150ms ease, opacity 150ms ease;
     }
 
     .ghost-button:disabled,
@@ -88,14 +95,20 @@
     }
 
     .composer button {
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
-        color: white;
         min-width: 88px;
     }
 
-    .ghost-button:hover,
-    .composer button:hover {
-        transform: translateY(-1px);
+    .ghost-button:hover:not(:disabled),
+    .composer button:hover:not(:disabled) {
+        border-color: #c8baf4;
+        background: #f4f0ff;
+        color: #49358c;
+    }
+
+    .ghost-button:focus-visible,
+    .composer button:focus-visible {
+        outline: 2px solid #8065d4;
+        outline-offset: 2px;
     }
 
     .messages {
@@ -103,31 +116,37 @@
         display: flex;
         flex-direction: column;
         gap: 0.85rem;
-        padding: 1rem 1.25rem;
+        min-height: 260px;
+        padding: 1.1rem;
         overflow: auto;
-        background: linear-gradient(180deg, rgba(241, 245, 249, 0.5), rgba(255, 255, 255, 0.1));
+        background: #fff;
     }
 
     .message {
         max-width: 80%;
         padding: 0.9rem 1rem;
+        border: 1px solid #efeeed;
         border-radius: 1rem;
         line-height: 1.5;
         font-size: 0.95rem;
-        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        box-shadow: 0 2px 8px rgba(31, 29, 35, 0.035);
     }
 
     .message.incoming {
         align-self: flex-start;
-        background: #f8fafc;
-        color: #0f172a;
+        background: #f3f2f1;
+        color: #343238;
         border-top-left-radius: 0.35rem;
     }
 
     .message.outgoing {
         align-self: flex-end;
-        background: linear-gradient(135deg, #2563eb, #3b82f6);
-        color: #fff;
+        background: #eee9fc;
+        border-color: #e4dcfa;
+        color: #432f84;
+        color: #000;
         border-top-right-radius: 0.35rem;
     }
 
@@ -136,7 +155,8 @@
         align-items: center;
         gap: 0.75rem;
         padding: 0.9rem 1.25rem 1.25rem;
-        border-top: 1px solid rgba(148, 163, 184, 0.22);
+        border-top: 1px solid #efeeed;
+        background: #fff;
     }
 
     .composer-actions {
@@ -149,45 +169,87 @@
     .composer input {
         flex: 1 1 auto;
         min-width: 0;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        border-radius: 999px;
-        background: white;
+        border: 1px solid #e6e5e3;
+        border-radius: 0.85rem;
+        background: #fff;
         padding: 0.85rem 1rem;
         font-size: 0.95rem;
-        color: #0f172a;
+        color: var(--dashboard-ink);
+    }
+
+    .composer input::placeholder {
+        color: #a09ea3;
     }
 
     .composer input:focus {
-        outline: 2px solid rgba(59, 130, 246, 0.2);
-        border-color: #60a5fa;
+        outline: 3px solid rgba(115, 86, 216, 0.12);
+        border-color: #9a84e5;
     }
 
     .preview-panel {
-        min-height: 500px;
+        min-height: 0;
     }
 
     .frame-wrap {
         flex: 1;
-        padding: 1rem 1.25rem 1.25rem;
+        min-height: 0;
+        padding: 0.85rem;
     }
 
     iframe {
         width: 100%;
         height: 100%;
-        min-height: 480px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        border-radius: 1rem;
-        background: white;
+        min-height: clamp(320px, calc(100vh - 18rem), 560px);
+        border: 1px solid #ebeae8;
+        border-radius: 0.9rem;
+        background: #f8f8f7;
     }
 
     @@media (max-width: 900px) {
         .home-page {
             grid-template-columns: 1fr;
-            padding: 1rem;
+            gap: 0.85rem;
+            padding: 0.85rem;
         }
 
         .frame-wrap {
             padding: 0.75rem;
+        }
+
+        .preview-panel {
+            min-height: 420px;
+        }
+    }
+
+    @@media (max-width: 560px) {
+        .composer {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .composer-actions {
+            justify-content: flex-end;
+        }
+
+        .panel-header {
+            align-items: flex-start;
+            padding: 1rem;
+        }
+
+        .panel-actions {
+            gap: 0.35rem;
+        }
+
+        .panel-actions .ghost-button {
+            padding: 0.55rem 0.7rem;
+        }
+
+        .preview-panel {
+            min-height: 360px;
+        }
+
+        iframe {
+            min-height: 320px;
         }
     }
 </style>
@@ -196,11 +258,11 @@
     <aside class="chat-panel">
         <div class="panel-header">
             <div>
-                <p class="eyebrow">Conversation</p>
-                <h2>Project Assistant</h2>
+                <p class="eyebrow">对话</p>
+                <h2>项目助手</h2>
             </div>
             <div class="panel-actions">
-                <button class="ghost-button" type="button" @onclick="ResetConversation">New chat</button>
+                <button class="ghost-button" type="button" @onclick="ResetConversation">新建对话</button>
             </div>
         </div>
 
@@ -215,10 +277,10 @@
         </div>
 
         <EditForm Model="this" OnValidSubmit="SendMessageAsync" class="composer">
-            <InputText @bind-Value="CurrentInput" placeholder="Type a message..." aria-label="Type a message" />
+            <InputText @bind-Value="CurrentInput" placeholder="输入消息..." aria-label="输入消息" />
             <div class="composer-actions">
-                <button type="submit" disabled="@IsLoading">Send</button>
-                <button type="button" class="ghost-button" disabled="@(!IsLoading)" @onclick="CancelCurrentRun">Cancel</button>
+                <button type="submit" disabled="@IsLoading">发送</button>
+                <button type="button" class="ghost-button" disabled="@(!IsLoading)" @onclick="CancelCurrentRun">取消</button>
             </div>
         </EditForm>
     </aside>
@@ -226,8 +288,8 @@
     <section class="preview-panel">
         <div class="panel-header">
             <div>
-                <p class="eyebrow">Preview</p>
-                <h2>HTML Host</h2>
+                <p class="eyebrow">预览</p>
+                <h2>网页预览</h2>
             </div>
             <div class="panel-actions">
                 <button
@@ -235,14 +297,14 @@
                     type="button"
                     disabled="@string.IsNullOrWhiteSpace(GeneratedHtml)"
                     @onclick="DownloadPreviewAsync">
-                    Download
+                    下载
                 </button>
                 <button
                     class="ghost-button"
                     type="button"
                     disabled="@(!IsLoggedIn || string.IsNullOrWhiteSpace(GeneratedHtml))"
                     @onclick="SavePreviewAsync">
-                    Save
+                    保存
                 </button>
             </div>
         </div>
@@ -251,7 +313,7 @@
             @if (!string.IsNullOrWhiteSpace(GeneratedHtml))
             {
                 <iframe
-                    title="Hosted HTML preview"
+                    title="网页预览"
                     srcdoc="@PreparePreviewHtml(GeneratedHtml)"
                     sandbox="allow-scripts allow-modals allow-forms"
                     allow=""
@@ -262,7 +324,7 @@
             else
             {
                 <iframe
-                    title="Hosted HTML preview"
+                    title="网页预览"
                     src="/html-host/index.html"
                     sandbox=""
                     loading="lazy">
@@ -279,8 +341,12 @@
     [SupplyParameterFromQuery(Name = "sessionid")]
     public string? SessionIdFromQuery { get; set; }
 
+    [SupplyParameterFromQuery(Name = "prompt")]
+    public string? PromptFromQuery { get; set; }
+
     private readonly List<ChatBubble> Messages = new();
     private string CurrentInput { get; set; } = string.Empty;
+    private string? _pendingPrompt;
     private bool IsLoading { get; set; }
     private bool IsLoggedIn { get; set; }
     private string? CurrentUserId { get; set; }
@@ -327,6 +393,7 @@
     protected override async Task OnInitializedAsync()
     {
         AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        _pendingPrompt = PromptFromQuery;
         _sessionIdWasProvided = !string.IsNullOrWhiteSpace(SessionIdFromQuery);
         CurrentSessionId = SessionIdFromQuery;
         if (!_sessionIdWasProvided)
@@ -335,6 +402,22 @@
         }
 
         await LoadPageOrUserStateAsync(await AuthenticationStateProvider.GetAuthenticationStateAsync());
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || string.IsNullOrWhiteSpace(_pendingPrompt))
+        {
+            return;
+        }
+
+        var prompt = _pendingPrompt;
+        _pendingPrompt = null;
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameter("prompt", (string?)null),
+            replace: true);
+        CurrentInput = prompt;
+        await SendMessageAsync();
     }
 
     private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
@@ -375,7 +458,6 @@
             : null;
 
         Messages.Clear();
-        Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
         GeneratedHtml = null;
 
         if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
@@ -398,7 +480,7 @@
         if (!IsLoggedIn || string.IsNullOrWhiteSpace(CurrentUserId))
         {
             Messages.Clear();
-            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+            Messages.Add(new ChatBubble("你好！我可以帮你创建网页应用。", false));
             GeneratedHtml = null;
 
             return;
@@ -415,13 +497,16 @@
             Messages.Clear();
             if (!await RestoreChatHistoryAsync(userState.ChatMessages, userState.GeneratedHtml))
             {
-                Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+                Messages.Add(new ChatBubble("你好！我可以帮你创建网页应用。", false));
             }
 
             GeneratedHtml = userState.GeneratedHtml;
         }
         else{
-            Messages.Add(new ChatBubble("Hello! I can help build web pages for you.", false));
+            if (Messages.Count == 0)
+            {
+                Messages.Add(new ChatBubble("你好！我可以帮你创建网页应用。", false));
+            }
         }
     }
 
@@ -480,7 +565,7 @@
         await SaveChatHistoryAsync();
 
         _runCts = new CancellationTokenSource();
-        var assistantMessage = new ChatBubble("Thinking...", false);
+        var assistantMessage = new ChatBubble("正在思考...", false);
         Messages.Add(assistantMessage);
         await InvokeAsync(StateHasChanged);
 
@@ -491,7 +576,7 @@
                 _runCts.Token,
                 async streamedText =>
                 {
-                    assistantMessage.Content = streamedText + "  Thinking ... ";
+                    assistantMessage.Content = streamedText + "\r\n  正在思考...";
                     await InvokeAsync(StateHasChanged);
                 });
             if (!string.IsNullOrWhiteSpace(ChatAgentHandler.LastHtmlContent))
@@ -499,10 +584,16 @@
                 GeneratedHtml = ChatAgentHandler.LastHtmlContent;
             }
             assistantMessage.Content = reply;
+            await InvokeAsync(StateHasChanged);
         }
         catch (OperationCanceledException)
         {
-            assistantMessage.Content = "Request cancelled.";
+            assistantMessage.Content = "请求已取消。";
+        }
+        catch (Exception ex)
+        {
+            assistantMessage.Content = $"请求失败：{ex.Message}";
+            Logger.LogError(ex, "Error during chat agent processing.");
         }
         finally
         {
@@ -532,7 +623,7 @@
             return;
         }
 
-        await JS.InvokeVoidAsync("downloadHtmlFile", "generated-page.html", GeneratedHtml);
+        await JS.InvokeVoidAsync("downloadHtmlFile", "生成的网页.html", GeneratedHtml);
     }
 
     private async Task SavePreviewAsync()
@@ -542,7 +633,7 @@
             return;
         }
 
-        var requestedName = await JS.InvokeAsync<string>("prompt", "Enter a file name for this HTML page:", "page");
+        var requestedName = await JS.InvokeAsync<string>("prompt", "请输入此网页的文件名：", "网页");
         if (string.IsNullOrWhiteSpace(requestedName))
         {
             return;
@@ -552,7 +643,7 @@
         var safeFileName = new string(fileName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch).ToArray());
         if (string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(safeFileName)))
         {
-            safeFileName = "page.html";
+            safeFileName = "网页.html";
         }
         else if (!safeFileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
         {
@@ -565,7 +656,7 @@
         }
         catch (Exception ex)
         {
-            Messages.Add(new ChatBubble($"Unable to save the page: {ex.Message}", false));
+            Messages.Add(new ChatBubble($"无法保存网页：{ex.Message}", false));
         }
     }
 
@@ -577,7 +668,7 @@
         }
         catch (Exception ex)
         {
-            Messages.Add(new ChatBubble($"Unable to start a new session: {ex.Message}", false));
+            Messages.Add(new ChatBubble($"无法创建新对话：{ex.Message}", false));
             return;
         }
 
@@ -586,7 +677,7 @@
         GeneratedHtml = null;
         CurrentInput = string.Empty;
         UpdateSessionId(Guid.NewGuid().ToString("N"));
-        Messages.Add(new ChatBubble("New conversation started. Ask anything about the project or the app.", false));
+        Messages.Add(new ChatBubble("已开始新对话。你可以继续描述项目或应用需求。", false));
     }
 
     private async Task SaveChatHistoryAsync()

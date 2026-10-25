@@ -17,6 +17,7 @@ public sealed class WebCreateChatHandler
 
     private AgentSession? _agentSession;
     private AIAgent? _agent;
+    private string? _lastToolResult;
 
     public WebCreateChatHandler(IConfiguration configuration, ILogger<WebCreateChatHandler> logger)
     {
@@ -36,7 +37,11 @@ public sealed class WebCreateChatHandler
 
         var azureOpenAiClient = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
         _chatClient = azureOpenAiClient.GetChatClient(modelName).AsIChatClient();
-        _agent = WebPageGeneratorAgent.Create(_chatClient, out var chatHistoryProvider, ReportToolActivityAsync);
+        _agent = WebPageGeneratorAgent.Create(
+            _chatClient,
+            out var chatHistoryProvider,
+            ReportToolActivityAsync,
+            CaptureToolResultAsync);
         _chatHistoryProvider = chatHistoryProvider;
         _isConfigured = true;
     }
@@ -72,6 +77,8 @@ public sealed class WebCreateChatHandler
         try
         {
             var agent = _agent ?? throw new InvalidOperationException("The AI agent is not configured.");
+            using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _lastToolResult = null;
             var responseText = new StringBuilder();
             var toolActivities = new List<string>();
             var lastStreamedText = string.Empty;
@@ -88,14 +95,28 @@ public sealed class WebCreateChatHandler
                 userMessage,
                 _agentSession,
                 new AgentRunOptions(),
-                cancellationToken))
+                runCancellation.Token))
             {
+                if (_lastToolResult is not null)
+                {   
+                    var historyProvider = _chatHistoryProvider
+                        ?? throw new InvalidOperationException("The agent chat history provider is not configured.");
+                    var messages = historyProvider.GetMessages(_agentSession);
+                    messages.Add(new ChatMessage(ChatRole.Assistant, _lastToolResult));
+                    historyProvider.SetMessages(_agentSession, messages);
+                    
+                    runCancellation.Cancel();
+                    break;
+                }
+
                 if (string.IsNullOrEmpty(update.Text))
                 {
                     continue;
                 }
 
                 responseText.Append(update.Text);
+
+
                 var streamedText = GetStreamedText(responseText.ToString());
                 if (onTextUpdate is not null && !string.IsNullOrEmpty(streamedText) &&
                     !string.Equals(streamedText, lastStreamedText, StringComparison.Ordinal))
@@ -105,7 +126,7 @@ public sealed class WebCreateChatHandler
                 }
             }
 
-            var finalText = responseText.ToString();
+            var finalText = _lastToolResult ?? responseText.ToString();
             var reply = ParseWorkflowResult(finalText);
             var finalReply = ComposeAssistantOutput(toolActivities, reply);
             if (onTextUpdate is not null)
@@ -209,6 +230,12 @@ public sealed class WebCreateChatHandler
     private Task ReportToolActivityAsync(string activity)
     {
         return _onToolActivityUpdate?.Invoke(activity) ?? Task.CompletedTask;
+    }
+
+    private Task CaptureToolResultAsync(string result)
+    {
+        _lastToolResult = result;
+        return Task.CompletedTask;
     }
 
     private static string ComposeAssistantOutput(IReadOnlyList<string> toolActivities, string response)

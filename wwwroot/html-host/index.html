@@ -1,18 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hosted HTML</title>
+    <title>网页预览</title>
     <style>
         :root {
-            --bg: #eef4ff;
-            --panel: #ffffff;
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --text: #0f172a;
-            --muted: #475569;
-            --shadow: rgba(15, 23, 42, 0.08);
+            --panel: #fff;
+            --primary: #7356d8;
+            --primary-dark: #6045bd;
+            --text: #28272b;
+            --muted: #77757b;
+            --shadow: rgba(31, 29, 35, 0.08);
         }
 
         * {
@@ -24,22 +23,23 @@
             min-height: 100vh;
             display: grid;
             place-items: center;
-            background: linear-gradient(135deg, #eff6ff, #e0e7ff);
-            font-family: Arial, sans-serif;
+            background: #f7f7f6;
+            font-family: "Segoe UI", Arial, sans-serif;
             color: var(--text);
         }
 
         .card {
             width: min(640px, 90vw);
-            background: var(--panel);
-            border-radius: 24px;
+            background: #fff;
+            border: 1px solid #e7e6e4;
+            border-radius: 20px;
             box-shadow: 0 20px 45px var(--shadow);
             padding: 2rem;
         }
 
         .badge {
             display: inline-block;
-            background: rgba(37, 99, 235, 0.1);
+            background: #f0ebff;
             color: var(--primary-dark);
             border-radius: 999px;
             padding: 0.4rem 0.75rem;
@@ -68,36 +68,44 @@
         }
 
         button {
-            border: none;
+            border: 1px solid #e8e7e5;
             border-radius: 999px;
-            padding: 0.85rem 1.3rem;
+            padding: 0.48rem 0.9rem;
             font-size: 0.95rem;
             font-weight: 700;
             cursor: pointer;
+            color: var(--text);
+            background: #fff;
+            transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+        }
+
+        button:hover {
+            border-color: #c8baf4;
+            background: #f4f0ff;
+            color: #49358c;
         }
 
         .primary {
-            background: var(--primary);
-            color: white;
+            background: #fff;
+            color: var(--text);
         }
 
         .secondary {
-            background: #e2e8f0;
+            background: #fff;
             color: var(--text);
         }
     </style>
 </head>
 <body>
     <main class="card">
-        <span class="badge">Embedded</span>
-        <h1>HTML Preview</h1>
+        <span class="badge">网页生成器</span>
+        <h1>网页预览</h1>
         <p>
-            This content is rendered inside an iframe hosted by the Blazor app. You can replace it with any HTML page,
-            dashboard, or mock UI you want to preview in the app.
+            这里会显示生成的网页预览。你可以创建网页、仪表盘或界面原型，并在此查看效果。
         </p>
         <div class="actions">
-            <button class="primary" type="button">Launch</button>
-            <button class="secondary" type="button">View source</button>
+            <button class="primary" type="button">开始创作</button>
+            <button class="secondary" type="button">查看代码</button>
         </div>
     </main>
 </body>
