@@ -7,21 +7,21 @@
 @inject UserStateService UserStateService
 @inject ILogger<ChatHistory> Logger
 
-<PageTitle>Chat history</PageTitle>
+<PageTitle>对话历史</PageTitle>
 
-<h1>Chat history</h1>
+<h1>对话历史</h1>
 
 @if (!isLoaded)
 {
-    <p>Loading chat history...</p>
+    <p>正在加载对话历史...</p>
 }
 else if (!isAuthenticated)
 {
-    <p>Sign in to view your chat history.</p>
+    <p>请先登录以查看对话历史。</p>
 }
 else if (sessions.Count == 0)
 {
-    <p>No saved conversations found for this user.</p>
+    <p>暂未找到已保存的对话。</p>
 }
 else
 {
@@ -29,9 +29,9 @@ else
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th scope="col">First user message</th>
-                    <th scope="col">Date and time</th>
-                    <th scope="col">Action</th>
+                    <th scope="col">首条消息</th>
+                    <th scope="col">日期和时间</th>
+                    <th scope="col">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -40,11 +40,11 @@ else
                     var firstUserMessage = session.Messages.FirstOrDefault(message =>
                         string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase));
                     <tr>
-                        <td>@(firstUserMessage?.Content ?? "Conversation")</td>
+                        <td>@(firstUserMessage?.Content ?? "对话")</td>
                         <td>@session.UpdatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                         <td>
                             <button class="btn btn-sm btn-primary" type="button" @onclick="() => LoadSession(session.SessionId)">
-                                Load
+                                打开
                             </button>
                         </td>
                     </tr>
@@ -62,7 +62,7 @@ else
     private void LoadSession(string sessionId)
     {
         Navigation.NavigateTo(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
-            "/",
+            "/chat",
             "sessionid",
             sessionId));
     }

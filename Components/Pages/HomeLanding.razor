@@ -1,0 +1,526 @@
+@page "/"
+@layout LandingLayout
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+
+<PageTitle>网页创作 - AI 应用生成器</PageTitle>
+
+<main class="landing-page">
+    <header class="landing-header">
+        <div class="header-start">
+            <a class="brand" href="/" aria-label="网页创作首页">
+                <span class="brand-mark" aria-hidden="true">✳</span>
+                <span>网页创作</span>
+            </a>
+            <a class="sign-in builder-link" href="/chat">打开创作工作台 <span aria-hidden="true">→</span></a>
+        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="landing-account">
+                    <span class="account-name">@GetUserDisplayName(context.User)</span>
+                    <a class="sign-in" href="/MicrosoftIdentity/Account/SignOut">退出登录</a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <a class="sign-in" href="/MicrosoftIdentity/Account/SignIn">
+                    登录 <span aria-hidden="true">↗</span>
+                </a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-title">
+        <div class="status-pill">
+            <span class="status-dot"></span>
+            AI 代码引擎 <span class="status-divider">·</span> 已就绪
+        </div>
+        <h1 id="hero-title">把想法变成<br /><span>可运行的应用</span></h1>
+        <p class="hero-description">
+            描述你想创建的应用，立即生成可运行的网页。
+            通过对话持续完善，让想法一步步成为现实。
+        </p>
+
+        <EditForm Model="this" OnValidSubmit="StartBuildingAsync" class="prompt-form">
+            <label for="landing-prompt">你想创建什么？</label>
+            <InputTextArea id="landing-prompt"
+                           @bind-Value="Prompt"
+                           placeholder="描述你的想法，例如：一个带分类和月度图表的个人记账本"
+                           rows="3"
+                           aria-label="描述你想创建的应用" />
+            <div class="composer-footer">
+                <span class="keyboard-hint">输入想法，开始创作</span>
+                <button type="submit" disabled="@(!CanStart)">
+                    <span>@(IsNavigating ? "正在打开创作工作台..." : "开始生成")</span>
+                    <span class="submit-arrow" aria-hidden="true">↗</span>
+                </button>
+            </div>
+        </EditForm>
+
+        <div class="suggestions" aria-label="试试这些示例">
+            <span class="suggestion-label">试试这些想法</span>
+            @foreach (var suggestion in Suggestions)
+            {
+                <button type="button" @onclick="() => Prompt = suggestion">@suggestion</button>
+            }
+        </div>
+    </section>
+
+    <section class="how-it-works" aria-label="使用步骤">
+        <article class="feature-card">
+            <div class="card-topline"><span>01 / 描述</span><span class="card-icon">↳</span></div>
+            <h2>说出你的想法</h2>
+            <p>描述你需要的功能，以及想要的视觉风格。</p>
+        </article>
+        <article class="feature-card">
+            <div class="card-topline"><span>02 / 生成</span><span class="card-icon">✳</span></div>
+            <h2>生成完整应用</h2>
+            <p>AI 为你创建完整的网页应用，生成后即可运行和预览。</p>
+        </article>
+        <article class="feature-card">
+            <div class="card-topline"><span>03 / 优化</span><span class="card-icon">↗</span></div>
+            <h2>持续打磨</h2>
+            <p>通过对话不断调整应用，聊天记录也会为你保留。</p>
+        </article>
+    </section>
+
+    <footer class="landing-footer">
+        <span>让每个值得实现的想法，都成为现实。</span>
+    </footer>
+</main>
+
+<style>
+    .landing-page {
+        --page-bg: #f7f7f6;
+        --panel-bg: #fff;
+        --panel-border: #e7e6e4;
+        --ink: #28272b;
+        --muted: #77757b;
+        min-height: 100vh;
+        box-sizing: border-box;
+        padding: 0 clamp(1.25rem, 5vw, 5rem);
+        color: var(--ink);
+        background-color: var(--page-bg);
+        font-family: Inter, "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+    }
+
+    .landing-header {
+        max-width: 1200px;
+        height: 76px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #e7e6e4;
+    }
+
+    .brand,
+    .sign-in,
+    .landing-footer a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-size: 0.97rem;
+        font-weight: 650;
+        letter-spacing: -0.025em;
+    }
+
+    .header-start {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .brand-mark {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid #d7ccf6;
+        border-radius: 9px;
+        color: #684dc6;
+        background: #e9e2fa;
+        font-size: 1.15rem;
+    }
+
+    .sign-in {
+        padding: 0.48rem 0.9rem;
+        border: 1px solid var(--panel-border);
+        border-radius: 999px;
+        color: #39373d;
+        background: #fff;
+        font-size: 0.84rem;
+        transition: background 150ms ease, border-color 150ms ease;
+        white-space: nowrap;
+    }
+
+    .sign-in:hover {
+        border-color: #c8baf4;
+        background: #f4f0ff;
+    }
+
+    .landing-account {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.7rem;
+        min-width: 0;
+    }
+
+    .account-name {
+        max-width: min(18rem, 40vw);
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.88rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .hero {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: clamp(3.75rem, 8vh, 6rem) 0 4rem;
+        text-align: center;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.5rem 0.8rem;
+        border: 1px solid #e7e6e4;
+        border-radius: 999px;
+        background: #fff;
+        color: #5c5961;
+        font-size: 0.65rem;
+        font-weight: 650;
+        letter-spacing: 0.12em;
+    }
+
+    .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #8fe3bd;
+        box-shadow: 0 0 12px rgba(143, 227, 189, 0.8);
+    }
+
+    .status-divider {
+        color: #8a878e;
+    }
+
+    .hero h1 {
+        margin: 1.5rem 0 1rem;
+        color: #252329;
+        font-size: clamp(2.7rem, 6.5vw, 5.25rem);
+        font-family: Georgia, "Songti SC", "Noto Serif CJK SC", serif;
+        font-weight: 650;
+        letter-spacing: -0.045em;
+        line-height: 1.02;
+    }
+
+    .hero h1 span {
+        color: #7356d8;
+    }
+
+    .hero-description {
+        max-width: 570px;
+        margin: 0 auto 2.15rem;
+        color: #77757b;
+        font-size: clamp(0.95rem, 1.7vw, 1.08rem);
+        line-height: 1.75;
+    }
+
+    .prompt-form {
+        padding: 1.1rem 1.2rem 1rem;
+        border: 1px solid #e2e0de;
+        border-radius: 1.4rem;
+        background: var(--panel-bg);
+        box-shadow: 0 10px 30px rgba(31, 29, 35, 0.06);
+        text-align: left;
+    }
+
+    .prompt-form label {
+        display: block;
+        margin: 0 0 0.75rem 0.1rem;
+        color: #39373d;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .prompt-form textarea {
+        display: block;
+        width: 100%;
+        resize: vertical;
+        box-sizing: border-box;
+        padding: 0.25rem 0.1rem;
+        border: 0;
+        outline: 0;
+        color: #302e34;
+        background: transparent;
+        font: inherit;
+        font-size: 0.98rem;
+        line-height: 1.65;
+    }
+
+    .prompt-form textarea::placeholder {
+        color: #949198;
+    }
+
+    .composer-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid #eeedeb;
+    }
+
+    .keyboard-hint {
+        color: #85828a;
+        font-size: 0.76rem;
+    }
+
+    .composer-footer button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
+        min-height: 42px;
+        padding: 0.48rem 0.9rem;
+        border: 1px solid #e8e7e5;
+        border-radius: 999px;
+        color: #39373d;
+        background: #fff;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 650;
+        cursor: pointer;
+        transition: border-color 150ms ease, background 150ms ease, color 150ms ease, opacity 150ms ease;
+    }
+
+    .composer-footer button:hover:not(:disabled) {
+        border-color: #c8baf4;
+        background: #f4f0ff;
+        color: #49358c;
+    }
+
+    .composer-footer button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .submit-arrow {
+        font-size: 1.05rem;
+    }
+
+    .suggestions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        margin-top: 1.15rem;
+    }
+
+    .suggestion-label {
+        margin-right: 0.15rem;
+        color: #85828a;
+        font-size: 0.62rem;
+        font-weight: 650;
+        letter-spacing: 0.12em;
+    }
+
+    .suggestions button {
+        padding: 0.48rem 0.7rem;
+        border: 1px solid #e7e6e4;
+        border-radius: 999px;
+        color: #39373d;
+        background: #fff;
+        font: inherit;
+        font-size: 0.72rem;
+        cursor: pointer;
+        transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+    }
+
+    .suggestions button:hover,
+    .suggestions button:focus-visible {
+        border-color: #c8baf4;
+        color: #49358c;
+        background: #f4f0ff;
+    }
+
+    .composer-footer button:focus-visible,
+    .suggestions button:focus-visible,
+    .sign-in:focus-visible {
+        outline: 2px solid #8065d4;
+        outline-offset: 2px;
+    }
+
+    .how-it-works {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.35rem 0 3.8rem;
+        border-top: 1px solid #e7e6e4;
+    }
+
+    .feature-card {
+        min-height: 150px;
+        padding: 1.25rem 1.35rem;
+        border: 1px solid var(--panel-border);
+        border-radius: 1.1rem;
+        background: #fff;
+        box-shadow: 0 4px 18px rgba(31, 29, 35, 0.035);
+    }
+
+    .card-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #7356d8;
+        font-size: 0.62rem;
+        font-weight: 650;
+        letter-spacing: 0.1em;
+    }
+
+    .card-icon {
+        color: #77757b;
+        font-size: 1.05rem;
+    }
+
+    .feature-card h2 {
+        margin: 1.05rem 0 0.45rem;
+        color: #28272b;
+        font-size: 1.08rem;
+        font-weight: 620;
+        letter-spacing: -0.025em;
+    }
+
+    .feature-card p {
+        max-width: 320px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+        line-height: 1.65;
+    }
+
+    .landing-footer {
+        display: flex;
+        justify-content: flex-start;
+        gap: 1rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.15rem 0 1.5rem;
+        border-top: 1px solid #e7e6e4;
+        color: #77757b;
+        font-size: 0.77rem;
+    }
+
+    @@media (max-width: 720px) {
+        .hero {
+            padding-top: 4rem;
+            padding-bottom: 3.25rem;
+        }
+
+        .how-it-works {
+            grid-template-columns: 1fr;
+            padding-bottom: 2.5rem;
+        }
+
+        .feature-card {
+            min-height: auto;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .landing-header {
+            height: 66px;
+        }
+
+        .header-start {
+            gap: 0.55rem;
+        }
+
+        .builder-link {
+            padding: 0.42rem 0.65rem;
+            font-size: 0.74rem;
+        }
+
+        .hero h1 {
+            font-size: 2.65rem;
+        }
+
+        .prompt-form {
+            padding: 0.95rem;
+        }
+
+        .suggestion-label {
+            flex-basis: 100%;
+        }
+
+        .landing-footer {
+            flex-direction: column;
+        }
+    }
+</style>
+
+@code {
+    private static string GetUserDisplayName(ClaimsPrincipal user)
+    {
+        var displayName = user.FindFirst("name")?.Value
+            ?? user.FindFirst("given_name")?.Value
+            ?? user.Identity?.Name;
+
+        return string.IsNullOrWhiteSpace(displayName) ? "用户" : displayName;
+    }
+
+    private static readonly string[] Suggestions =
+    [
+        "创建一个中文单页计算器",
+        "制作待办清单。能添加任务、勾选完成、删除任务，实时显示未完成数量。",
+        "做一个中文点击计数小游戏：初始分数0，点击得分按钮每次加1，达到5分显示胜利",
+        "制作一个贪食蛇小游戏，使用键盘方向键控制蛇的移动",
+        "制作带菜单的咖啡店主页"
+    ];
+
+    private string Prompt { get; set; } = string.Empty;
+    private bool IsNavigating { get; set; }
+    private bool CanStart => !IsNavigating && !string.IsNullOrWhiteSpace(Prompt);
+
+    private Task StartBuildingAsync()
+    {
+        var prompt = Prompt.Trim();
+        if (string.IsNullOrWhiteSpace(prompt) || IsNavigating)
+        {
+            return Task.CompletedTask;
+        }
+
+        IsNavigating = true;
+        var destination = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
+            "/chat",
+            "prompt",
+            prompt);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+            Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("sessionid", out var sessionId))
+        {
+            destination = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
+                destination,
+                "sessionid",
+                sessionId.ToString());
+        }
+
+        Navigation.NavigateTo(destination);
+        return Task.CompletedTask;
+    }
+}

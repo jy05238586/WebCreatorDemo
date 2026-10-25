@@ -7,26 +7,26 @@
 @inject HtmlPageStorageService HtmlPageStorageService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Projects</PageTitle>
+<PageTitle>我的项目</PageTitle>
 
-<h1>Projects</h1>
+<h1>我的项目</h1>
 
 @if (!isLoaded)
 {
-    <p>Loading your saved pages...</p>
+    <p>正在加载已保存的网页...</p>
 }
 else if (savedPages.Count == 0)
 {
-    <p>No saved web pages found for this user.</p>
+    <p>暂未找到已保存的网页。生成网页后，登录即可将其保存到这里。</p>
 }
 else
 {
     <table class="table table-striped">
         <thead>
             <tr>
-                <th>File</th>
-                <th>Saved</th>
-                <th>Preview</th>
+                <th>文件</th>
+                <th>保存时间</th>
+                <th>预览</th>
             </tr>
         </thead>
         <tbody>
@@ -36,7 +36,7 @@ else
                     <td>@(savedPage.FileName)</td>
                     <td>@savedPage.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                     <td>
-                        <a href="@BuildSavedPageUrl(savedPage.RowKey)">Open</a>
+                        <a href="@BuildSavedPageUrl(savedPage.RowKey)">打开</a>
                     </td>
                 </tr>
             }
@@ -51,7 +51,7 @@ else
 
     private string BuildSavedPageUrl(string pageId)
     {
-        var url = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("/", "page", pageId);
+        var url = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("/chat", "page", pageId);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
             Navigation.ToAbsoluteUri(Navigation.Uri).Query);
 

@@ -2,7 +2,6 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
-@inject IConfiguration Configuration
 
 <div class="page">
     <div class="sidebar">
@@ -14,11 +13,11 @@
             <AuthorizeView>
                 <Authorized>
                     <span class="user-name">@GetUserDisplayName(context.User)</span>
-                    <a href="/MicrosoftIdentity/Account/SignOut">sign out</a>
+                    <a href="/MicrosoftIdentity/Account/SignOut">退出登录</a>
                 </Authorized>
                 <NotAuthorized>
-                    <span class="user-name">Guest</span>
-                    <a href="/MicrosoftIdentity/Account/SignIn">sign in</a>
+                    <span class="user-name">访客</span>
+                    <a href="/MicrosoftIdentity/Account/SignIn">登录</a>
                 </NotAuthorized>
             </AuthorizeView>
         </div>
@@ -35,19 +34,19 @@
         var fullName = user.FindFirst("name")?.Value
             ?? user.FindFirst("given_name")?.Value
             ?? user.Identity?.Name
-            ?? "User";
+            ?? "用户";
 
         if (!string.IsNullOrWhiteSpace(fullName))
         {
             return fullName;
         }
 
-        return "User";
+        return "用户";
     }
 }
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    发生了未处理的错误。
+    <a href="." class="reload">重新加载</a>
+    <span class="dismiss" aria-label="关闭">🗙</span>
 </div>
