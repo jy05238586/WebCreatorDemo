@@ -132,7 +132,7 @@ public sealed class WebCreateChatHandler
         }
         catch (OperationCanceledException)
         {
-            return "Request cancelled.";
+            return "请求已取消。";
         }
         catch (Exception ex)
         {
