@@ -34,7 +34,7 @@ internal static class HtmlGenerationTool
     {
         if (onToolActivity is not null)
         {
-            await onToolActivity("正在生成网页...");
+            await onToolActivity("正在调用工具生成网页...");
         }
 
         var candidates = await Task.WhenAll(

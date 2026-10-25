@@ -128,13 +128,7 @@ public sealed class WebCreateChatHandler
 
             var finalText = _lastToolResult ?? responseText.ToString();
             var reply = ParseWorkflowResult(finalText);
-            var finalReply = ComposeAssistantOutput(toolActivities, reply);
-            if (onTextUpdate is not null)
-            {
-                await onTextUpdate(finalReply);
-            }
-
-            return finalReply;
+            return reply;
         }
         catch (OperationCanceledException)
         {
